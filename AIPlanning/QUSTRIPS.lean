@@ -1,4 +1,5 @@
 import AIPlanning.STRIPS
+import Mathlib.Data.Fintype.Basic
 
 namespace AIPlanning.QUSTRIPS
 
@@ -38,14 +39,53 @@ def inverse? {α : Type} [BeliefLevel α] (b: α): Option α :=
 
 end BeliefLevel
 
-
 /-Properties of BeliefLevels-/
-class LawfulBeliefLevel (α : Type) [BeliefLevel α]  where
+class LawfulBeliefLevel (α : Type) [BeliefLevel α] where
+  elems: Finset Int
+  complete: ∀ (b : α), BeliefLevel.toInt b ∈ elems
+
+  injective : ∀ (b₁ b₂ : α), BeliefLevel.toInt b₁ = BeliefLevel.toInt b₂ → b₁ = b₂
+  surjective : ∀ i ∈ elems, ∃ (b: α), BeliefLevel.toInt b = i
+
+  -- Show that (fromInt) is the psuedo inverse of toInt
+  left_inverse : ∀ (b: α), BeliefLevel.fromInt (BeliefLevel.toInt b) = some b
+  right_inverse : ∀ (i: Int), ∀ (b: α), BeliefLevel.fromInt i = some (b: α) → BeliefLevel.toInt b = i
+
+  -- Other Properties
   agnostic_exists : ∃ (x : α), BeliefLevel.fromInt 0 = some x
-  conversion_sound₁ : ∀ (b : α), BeliefLevel.fromInt (BeliefLevel.toInt b) = some b
-  conversion_sound₂ : ∀ (i: Int), ∀ (b: α), BeliefLevel.fromInt i = some (b: α) → BeliefLevel.toInt b = i
   inverse_exists : ∀ (b : α), ∃ (b₂ : α), BeliefLevel.inverse? b = some b₂
 
+
+namespace LawfulBeliefLevel
+
+def toElem [BeliefLevel α] [LawfulBeliefLevel α] (b: α) : {x : Int // x ∈ LawfulBeliefLevel.elems α} :=
+  .mk (BeliefLevel.toInt b) (by
+    have H :  ∀ (b : α), BeliefLevel.toInt b ∈ (LawfulBeliefLevel.elems α ) := LawfulBeliefLevel.complete
+    exact H b
+  )
+
+def fromElem [BeliefLevel α] [LawfulBeliefLevel α] (b: {x : Int // x ∈ LawfulBeliefLevel.elems α}): α :=
+  (BeliefLevel.fromInt b).get (by
+    have H : ∀ i ∈ (LawfulBeliefLevel.elems α), ∃ (b: α), BeliefLevel.toInt b = i := LawfulBeliefLevel.surjective
+    have H2 := H b
+    have H3 : ↑b ∈ elems α := by sorry
+    have H4 := H2 H3
+    sorry
+  )
+
+instance [BeliefLevel α] [LawfulBeliefLevel α]: Function.Injective (toElem: α → {x : Int // x ∈ LawfulBeliefLevel.elems α}) := by
+  sorry
+
+instance [BeliefLevel α] [LawfulBeliefLevel α]: Function.Surjective (toElem : α → {x: Int // x ∈ LawfulBeliefLevel.elems α}) := by
+  sorry
+
+theorem maximum_exists {α: Type} [BeliefLevel α] [LawfulBeliefLevel α] : ∃ (bₘ: α), ∀ (bᵢ: α), bᵢ ≤ bₘ := by
+  sorry
+
+theorem minimum_exists {α: Type} [BeliefLevel α] [LawfulBeliefLevel α] : ∃ (bₘ : α), ∀ (bᵢ : α), bᵢ ≥ bₘ := by
+  sorry
+
+end LawfulBeliefLevel
 
 namespace BeliefLevel
 def Agnostic {α: Type} [BeliefLevel α] [LawfulBeliefLevel α]: α :=
@@ -54,11 +94,18 @@ def Agnostic {α: Type} [BeliefLevel α] [LawfulBeliefLevel α]: α :=
     exact Option.isSome_iff_exists.mpr H
   )
 
+def Certainly {α: Type} [BeliefLevel α] [LawfulBeliefLevel α]: α := by
+  sorry
+
+def CertainlyNot {α: Type} [BeliefLevel α] [LawfulBeliefLevel α]: α := by
+  sorry
+
 def inverse {α : Type} [BeliefLevel α] [LawfulBeliefLevel α] (b: α): α :=
   (BeliefLevel.inverse? b).get (by
     have H := @LawfulBeliefLevel.inverse_exists α
     exact Option.isSome_iff_exists.mpr (H b)
   )
+
 end BeliefLevel
 
 namespace LawfulBeliefLevel
@@ -75,7 +122,6 @@ theorem agnostic_zero_2 {α : Type} [BeliefLevel α] [LawfulBeliefLevel α] : Be
   have H2 : BeliefLevel.fromInt 0 = some x := agnostic_zero_1
   exact H1 H2
 
-
 theorem agnostic_inverse_self (α : Type) [BeliefLevel α] [LawfulBeliefLevel α] : (BeliefLevel.Agnostic: α) = BeliefLevel.inverse (BeliefLevel.Agnostic: α) := by
   rw [BeliefLevel.inverse.eq_def]
   unfold BeliefLevel.inverse?
@@ -87,6 +133,8 @@ theorem agnostic_inverse_self (α : Type) [BeliefLevel α] [LawfulBeliefLevel α
     rw [H1]
     apply agnostic_zero_1
   exact Eq.symm (Option.get_of_mem (BeliefLevel.inverse.proof_1 BeliefLevel.Agnostic) H2)
+
+
 
 end LawfulBeliefLevel
 
@@ -115,6 +163,40 @@ instance : BeliefLevel BL5 where
 
 
 instance : LawfulBeliefLevel BL5 where
+  elems := {-2, -1, 0, 1, 2}
+  injective := by
+    intro b₁ b₂
+    intro H
+    unfold BeliefLevel.toInt at H
+    unfold instBeliefLevelBL5 at H
+    simp at H
+    cases b₁
+    all_goals (cases b₂)
+    repeat (
+      simp
+      contradiction
+    )
+    simp
+  surjective := by
+    intro i H
+    cases' H with _ _ _ H
+    existsi .CERTAINLY_NOT
+    rfl
+    cases' H with _ _ _ H
+    existsi .EVIDENTLY_NOT
+    rfl
+    cases' H with _ _ _ H
+    existsi .AGNOSTIC
+    rfl
+    cases' H with _ _ _ H
+    existsi .EVIDENTLY
+    rfl
+    cases' H with _ _ _ H
+    existsi .CERTAINLY
+    rfl
+    contradiction
+
+
   agnostic_exists := by
     existsi .AGNOSTIC
     rfl
@@ -126,11 +208,11 @@ instance : LawfulBeliefLevel BL5 where
     case AGNOSTIC => existsi .AGNOSTIC; rfl
     case EVIDENTLY => existsi .EVIDENTLY_NOT; rfl
     case CERTAINLY => existsi .CERTAINLY_NOT; rfl
-  conversion_sound₁ := by
+  left_inverse := by
     intro b
     cases b
     all_goals rfl
-  conversion_sound₂ := by
+  right_inverse := by
     intro i
     intro b
     intro H
